@@ -319,73 +319,83 @@ class M3Twitter(M3Inference):
         return output
 
     def process_twitter_batch(self, data):
+        import torch
 
-        users_li = []
-        for user in data:
+        if osp.exists("users_li.pt"):
+            users_li = torch.load("users_li.pt")
 
-            screen_name = self._get_twitter_attrib("screen_name", user)
-            id = user.get("id", "")
-            bio = user.get("description", "")
-            name = user.get("name", "")
-            img_path = user.get("profile_image_url", "")
-            if id == "":
-                id = "dummy"  # Can be anything since batch is of size 1
+        else:
+            users_li = []
+            for user in tqdm(data, desc="Processing Twitter users"):
 
-            if bio == "":
-                lang = UNKNOWN_LANG
-            else:
-                lang = get_lang(bio)
+                screen_name = self._get_twitter_attrib("screen_name", user)
+                id = user.get("id", "")
+                bio = user.get("description", "")
+                name = user.get("name", "")
+                img_path = user.get("profile_image_url", "")
+                if id == "":
+                    id = "dummy"  # Can be anything since batch is of size 1
 
-            if img_path == "" or "default_profile" in img_path:
-                logger.warning(
-                    "Unable to extract image from Twitter. Using default image.")
-                img_file_resize = TW_DEFAULT_PROFILE_IMG
-            else:
+                if bio == "":
+                    lang = UNKNOWN_LANG
+                else:
+                    lang = get_lang(bio)
 
-                img_path = img_path.replace("_200x200", "_400x400").replace(
-                    "_normal", "_400x400")
+                if img_path == "" or "default_profile" in img_path:
+                    logger.warning(
+                        "Unable to extract image from Twitter. Using default image.")
+                    img_file_resize = TW_DEFAULT_PROFILE_IMG
+                else:
 
-                img_full_dir = osp.join(self.data_dir, "profile_img_full")
-                img_resize_dir = osp.join(self.data_dir, "profile_img_resize")
+                    img_path = img_path.replace("_200x200", "_400x400").replace(
+                        "_normal", "_400x400")
 
-                os.makedirs(img_full_dir, exist_ok=True)
-                os.makedirs(img_resize_dir, exist_ok=True)
+                    img_full_dir = osp.join(self.data_dir, "profile_img_full")
+                    img_resize_dir = osp.join(self.data_dir, "profile_img_resize")
 
-                img_file_full = f"{img_full_dir}/{id}" + (
-                    f".{img_path[img_path.rfind('.') + 1:]}" if '.' in
-                                                                img_path.split(
-                                                                    '/')[
-                                                                    -1] else '')
-                img_file_resize = "{}/{}_224x224.{}".format(img_resize_dir, id,
-                                                            get_extension(
-                                                                img_path))
+                    os.makedirs(img_full_dir, exist_ok=True)
+                    os.makedirs(img_resize_dir, exist_ok=True)
 
-                if osp.exists(img_file_resize):
-                    pass
-                    # with open(img_file_resize, 'rb') as f:
-                    #     img_file_resize = f.read()
+                    img_file_full = f"{img_full_dir}/{id}" + (
+                        f".{img_path[img_path.rfind('.') + 1:]}" if '.' in
+                                                                    img_path.split(
+                                                                        '/')[
+                                                                        -1] else '')
+                    img_file_resize = "{}/{}_224x224.{}".format(img_resize_dir, id,
+                                                                get_extension(
+                                                                    img_path))
 
-                download_resize_img(img_path, img_file_resize, img_file_full)
+                    if osp.exists(img_file_resize):
+                        pass
+                        # with open(img_file_resize, 'rb') as f:
+                        #     img_file_resize = f.read()
 
-            users_li += [{
-                "description": bio,
-                "id": id,
-                "img_path": img_file_resize,
-                "lang": lang,
-                "name": name,
-                "screen_name": screen_name,
-            }]
+                    download_resize_img(img_path, img_file_resize, img_file_full)
+
+                users_li += [{
+                    "description": bio,
+                    "id": id,
+                    "img_path": img_file_resize,
+                    "lang": lang,
+                    "name": name,
+                    "screen_name": screen_name,
+                }]
 
         preds = self.infer(users_li, batch_size=64, num_workers=0)
 
         outputs = []
         os.makedirs(osp.join(self.data_dir, "inferred_user_attributes"), exist_ok=True)
+        num_errors = 0
 
         for idx_user, (user_id, pred) in enumerate(preds.items()):
             assert data[idx_user]["id"] == user_id
+            try:
+                name = self.id2name[user_id]
+                json.dump(pred, open(osp.join(self.data_dir, "inferred_user_attributes", f"{name}.json"), "w", encoding='utf-8'), indent=2, sort_keys=True)
 
-            name = self.id2name[user_id]
-            json.dump(pred, open(osp.join(self.data_dir, "inferred_user_attributes", f"{name}.json"), "w", encoding='utf-8'), indent=2, sort_keys=True)
+            except:
+                num_errors += 1
+                print(f"{num_errors}-th error: user {user_id}")
 
             # output = {
             #     "input": data[idx_user],

@@ -2,7 +2,7 @@ import json
 import os
 import os.path as osp
 import pprint
-
+import torch
 from m3inference import M3Twitter
 
 data_dir = "F:\\data\\ScientificReport2021"
@@ -31,21 +31,20 @@ m3twitter.twitter_init(api_key=keys[idx_auth]['API_KEY'],
 user_features_li = []
 
 
+if osp.exists("user_features_li.pt"):
+    user_features_li = torch.load("user_features_li.pt")
 
-for i, path in enumerate(
-        os.listdir(osp.join(data_dir, "downloaded_final_user_attributes"))):
-    if path.endswith('.json'):
+else:
+    for i, path in enumerate(
+            tqdm(os.listdir(osp.join(data_dir, "downloaded_final_user_attributes")), desc="Load Users")):
+        if path.endswith('.json'):
 
-        try:
-            user = json.load(
-                open(osp.join(data_dir, "downloaded_final_user_attributes", path), 'r', encoding='utf-8'))
-            user_features_li.append(user)
-        except:
-            pass
-
-    if len(user_features_li) >= 5:
-        break
+            try:
+                user = json.load(
+                    open(osp.join(data_dir, "downloaded_final_user_attributes", path), 'r', encoding='utf-8'))
+                user_features_li.append(user)
+            except:
+                pass
 
 output = m3twitter.process_twitter_batch(user_features_li)
 
-# pprint.pprint(m3twitter.infer_id("2631881902"))

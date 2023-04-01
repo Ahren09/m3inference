@@ -40,7 +40,10 @@ class M3InferenceDataset(Dataset):
         if self.use_img:
             _id, lang, username, screenname, des, img_path = data
             # image
-            fig = self._image_loader(img_path)
+            try:
+                fig = self._image_loader(img_path)
+            except:
+                fig = self._image_loader(TW_DEFAULT_PROFILE_IMG)
         else:
             _id, lang, username, screenname, des = data
 
